@@ -78,3 +78,4 @@ Write-Host "`nAll settings applied successfully." -ForegroundColor Cyan
 Write-Host "Results copied to clipboard ✅" -ForegroundColor Green
 $result | Set-Clipboard
 Write-Host $result
+
