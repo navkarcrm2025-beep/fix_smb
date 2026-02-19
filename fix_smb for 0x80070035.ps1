@@ -155,8 +155,10 @@ function Moderate-Mode {
             ipconfig /flushdns
         }
 
+        # Try opening \\ServerName\ (root path) directly
+        $UNCPath = "\\$ServerName\"
         Write-Host "Opening \\$ServerName in File Explorer..."
-        Start-Process explorer.exe "\\$ServerName"
+        Start-Process explorer.exe $UNCPath
 
         # Ask user if accessible now
         $userInput = Read-Host "Check Explorer: Can you access \\$ServerName now? (Y/N)"
@@ -171,16 +173,11 @@ function Moderate-Mode {
         Reset-NetworkStack
     }
 
-    Write-Host "Opening \\$ServerName in File Explorer..."
-    Start-Process explorer.exe "\\$ServerName"
-    $userInput = Read-Host "Check Explorer: Try \\$ServerName again. Accessible? (Y/N)"
-    if ($userInput -match "^[Yy]") { return }
-
     # Step 3: Firewall / Discovery
     Enable-NetworkDiscovery
     Reset-NetworkStack
-    Write-Host "Opening \\$ServerName in File Explorer..."
-    Start-Process explorer.exe "\\$ServerName"
+    Write-Host "Opening \\$ServerName in File Explorer again..."
+    Start-Process explorer.exe $UNCPath
     $userInput = Read-Host "Check Explorer: Try \\$ServerName again. Accessible? (Y/N)"
     if ($userInput -match "^[Yy]") { return }
 
@@ -189,7 +186,7 @@ function Moderate-Mode {
     Set-SmbClientConfiguration -RequireSecuritySignature $false -Force
     Reset-NetworkStack
     Write-Host "Opening \\$ServerName in File Explorer..."
-    Start-Process explorer.exe "\\$ServerName"
+    Start-Process explorer.exe $UNCPath
     $userInput = Read-Host "Check Explorer: Try \\$ServerName again. Accessible? (Y/N)"
     if ($userInput -match "^[Yy]") { return }
 
@@ -199,7 +196,7 @@ function Moderate-Mode {
         Set-SmbClientConfiguration -EnableInsecureGuestLogons $true -Force
         Reset-NetworkStack
         Write-Host "Opening \\$ServerName in File Explorer..."
-        Start-Process explorer.exe "\\$ServerName"
+        Start-Process explorer.exe $UNCPath
     }
 
     # Step 6: SMB1 (Legacy server)
@@ -208,7 +205,7 @@ function Moderate-Mode {
         Enable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart
         Reset-NetworkStack
         Write-Host "Opening \\$ServerName in File Explorer..."
-        Start-Process explorer.exe "\\$ServerName"
+        Start-Process explorer.exe $UNCPath
     }
 
     Write-Host "`nModerate Mode steps completed. Check Explorer to access \\$ServerName" -ForegroundColor Green
