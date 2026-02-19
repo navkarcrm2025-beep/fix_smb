@@ -155,8 +155,11 @@ function Moderate-Mode {
             ipconfig /flushdns
         }
 
+        Write-Host "Opening \\$ServerName in File Explorer..."
+        Start-Process explorer.exe "\\$ServerName"
+
         # Ask user if accessible now
-        $userInput = Read-Host "Can you access \\$ServerName now? (Y/N)"
+        $userInput = Read-Host "Check Explorer: Can you access \\$ServerName now? (Y/N)"
         if ($userInput -match "^[Yy]") { $resolved = $true } else { break }
     }
 
@@ -168,20 +171,26 @@ function Moderate-Mode {
         Reset-NetworkStack
     }
 
-    $userInput = Read-Host "Try \\$ServerName again. Accessible? (Y/N)"
+    Write-Host "Opening \\$ServerName in File Explorer..."
+    Start-Process explorer.exe "\\$ServerName"
+    $userInput = Read-Host "Check Explorer: Try \\$ServerName again. Accessible? (Y/N)"
     if ($userInput -match "^[Yy]") { return }
 
     # Step 3: Firewall / Discovery
     Enable-NetworkDiscovery
     Reset-NetworkStack
-    $userInput = Read-Host "Try \\$ServerName again. Accessible? (Y/N)"
+    Write-Host "Opening \\$ServerName in File Explorer..."
+    Start-Process explorer.exe "\\$ServerName"
+    $userInput = Read-Host "Check Explorer: Try \\$ServerName again. Accessible? (Y/N)"
     if ($userInput -match "^[Yy]") { return }
 
     # Step 4: SMB Signing Relax (Temporary)
     Write-Host "Temporarily relaxing SMB signing for client..."
     Set-SmbClientConfiguration -RequireSecuritySignature $false -Force
     Reset-NetworkStack
-    $userInput = Read-Host "Try \\$ServerName again. Accessible? (Y/N)"
+    Write-Host "Opening \\$ServerName in File Explorer..."
+    Start-Process explorer.exe "\\$ServerName"
+    $userInput = Read-Host "Check Explorer: Try \\$ServerName again. Accessible? (Y/N)"
     if ($userInput -match "^[Yy]") { return }
 
     # Step 5: Guest Logon (Optional)
@@ -189,6 +198,8 @@ function Moderate-Mode {
     if ($guest -match "^[Yy]") {
         Set-SmbClientConfiguration -EnableInsecureGuestLogons $true -Force
         Reset-NetworkStack
+        Write-Host "Opening \\$ServerName in File Explorer..."
+        Start-Process explorer.exe "\\$ServerName"
     }
 
     # Step 6: SMB1 (Legacy server)
@@ -196,9 +207,11 @@ function Moderate-Mode {
     if ($smb1Check -match "^[Yy]") {
         Enable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart
         Reset-NetworkStack
+        Write-Host "Opening \\$ServerName in File Explorer..."
+        Start-Process explorer.exe "\\$ServerName"
     }
 
-    Write-Host "`nModerate Mode steps completed. Check access to \\$ServerName" -ForegroundColor Green
+    Write-Host "`nModerate Mode steps completed. Check Explorer to access \\$ServerName" -ForegroundColor Green
 }
 
 # ============================================================
