@@ -155,7 +155,7 @@ function Moderate-Mode {
             ipconfig /flushdns
         }
 
-        # Try opening \\ServerName\ (root path) directly
+        # Make sure to open the correct UNC path
         $UNCPath = "\\$ServerName\"
         Write-Host "Opening \\$ServerName in File Explorer..."
         Start-Process explorer.exe $UNCPath
