@@ -1,81 +1,135 @@
-# ============================================
-# FIX SMB/Network Path Issues (0x80070035)
-# Allow Insecure Guest Logons + Disable SMB Signing
-# Compatible with Windows 10/11 Pro (and Home)
-# Run PowerShell as Administrator
-# ============================================
+# ============================================================
+# ULTIMATE NETWORK + SMB FIX TOOL
+# Compatible: Windows 10 / 11
+# ============================================================
 
-# Function to check admin privileges
-function Test-Admin {
-    return ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+Clear-Host
+Write-Host "=== ULTIMATE NETWORK + SMB REPAIR TOOL ===" -ForegroundColor Cyan
+
+# ============================================================
+# EXECUTION POLICY CHECK
+# ============================================================
+
+if ((Get-ExecutionPolicy -Scope CurrentUser) -eq "Restricted") {
+    Write-Host ""
+    Write-Host "Execution Policy blocks scripts." -ForegroundColor Red
+    Write-Host "Run this in a NEW PowerShell window:" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Green
+    Write-Host ""
+    return
 }
 
-if (-not (Test-Admin)) {
-    Write-Warning "This script must be run as Administrator."
-    exit
+# ============================================================
+# ADMIN CHECK (ISE SAFE)
+# ============================================================
+
+$IsAdmin = ([Security.Principal.WindowsPrincipal] `
+    [Security.Principal.WindowsIdentity]::GetCurrent()
+).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $IsAdmin) {
+    Write-Host "Please restart PowerShell as Administrator." -ForegroundColor Red
+    return
 }
 
-Write-Host "Applying SMB configuration changes..." -ForegroundColor Cyan
+Write-Host "Running as Administrator." -ForegroundColor Green
 
-# --- STEP 1: Allow Insecure Guest Logons ---
-$lanmanKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LanmanWorkstation"
-if (-not (Test-Path $lanmanKey)) { New-Item -Path $lanmanKey -Force | Out-Null }
-Set-ItemProperty -Path $lanmanKey -Name "AllowInsecureGuestAuth" -Value 1 -Type DWord
-Write-Host "✅ Enabled insecure guest logons." -ForegroundColor Green
+# ============================================================
+# CONFIGURATION SWITCH
+# ============================================================
 
-# --- STEP 2: Disable SMB Signing (Client side) ---
-$lsaPath = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters"
-if (-not (Test-Path $lsaPath)) { New-Item -Path $lsaPath -Force | Out-Null }
-Set-ItemProperty -Path $lsaPath -Name "RequireSecuritySignature" -Value 0 -Type DWord
-Set-ItemProperty -Path $lsaPath -Name "EnableSecuritySignature" -Value 0 -Type DWord
-Write-Host "✅ Disabled SMB signing for client communications." -ForegroundColor Green
+$EnableInsecureSMB = $true   # <<< SET TO $false IF YOU WANT SECURITY SAFE MODE
 
-# --- STEP 3: Disable SMB Signing (Server side) ---
-$serverPath = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters"
-if (-not (Test-Path $serverPath)) { New-Item -Path $serverPath -Force | Out-Null }
-Set-ItemProperty -Path $serverPath -Name "RequireSecuritySignature" -Value 0 -Type DWord
-Set-ItemProperty -Path $serverPath -Name "EnableSecuritySignature" -Value 0 -Type DWord
-Write-Host "✅ Disabled SMB signing for server communications." -ForegroundColor Green
+# ============================================================
+# NETWORK FUNCTIONS
+# ============================================================
 
-# --- STEP 4: Apply via native commands (redundant but ensures consistency) ---
-reg add HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters /f /v RequireSecuritySignature /t REG_DWORD /d 0 | Out-Null
-reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\LanmanWorkstation /f /v AllowInsecureGuestAuth /t REG_DWORD /d 1 | Out-Null
-reg add HKLM\SOFTWARE\WOW6432Node\Policies\Microsoft\Windows\LanmanWorkstation /f /v AllowInsecureGuestAuth /t REG_DWORD /d 1 | Out-Null
+function Enable-NetworkDiscovery {
+    $nd = Get-NetFirewallRule -DisplayGroup "Network Discovery"
+    if ($nd.Enabled -contains "False") {
+        Set-NetFirewallRule -DisplayGroup "Network Discovery" -Enabled True
+        Write-Host "Network Discovery Enabled." -ForegroundColor Green
+    }
+    else { Write-Host "Network Discovery Already Enabled." -ForegroundColor Yellow }
 
-Set-SmbClientConfiguration -EnableInsecureGuestLogons $true -Force
-Set-SmbClientConfiguration -RequireSecuritySignature $false -Force
-Set-SmbServerConfiguration -RequireSecuritySignature $false -Force
+    $fps = Get-NetFirewallRule -DisplayGroup "File and Printer Sharing"
+    if ($fps.Enabled -contains "False") {
+        Set-NetFirewallRule -DisplayGroup "File and Printer Sharing" -Enabled True
+        Write-Host "File & Printer Sharing Enabled." -ForegroundColor Green
+    }
+    else { Write-Host "File & Printer Sharing Already Enabled." -ForegroundColor Yellow }
+}
 
-# --- STEP 5: Collect Updated Configuration ---
-$clientCfg = Get-SmbClientConfiguration | Select-Object EnableInsecureGuestLogons, RequireSecuritySignature
-$serverCfg = Get-SmbServerConfiguration | Select-Object RequireSecuritySignature
-$guestAuth = Get-ItemProperty -Path $lanmanKey | Select-Object AllowInsecureGuestAuth
+function Reset-NetworkStack {
+    Write-Host "`nResetting Network Stack..."
+    ipconfig /flushdns | Out-Null
+    netsh winsock reset | Out-Null
+    netsh int ip reset | Out-Null
+    Write-Host "Network Stack Reset Done." -ForegroundColor Green
+}
 
-# Prepare final output
-$result = @"
-==============================
- SMB Configuration Summary
-==============================
+function Restart-NetworkAdapterSafe {
+    $adapter = Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object -First 1
+    if ($adapter) {
+        Restart-NetAdapter -Name $adapter.Name -Confirm:$false
+        Write-Host "Adapter Restarted: $($adapter.Name)" -ForegroundColor Green
+    }
+}
 
-[Client Config]
-EnableInsecureGuestLogons : $($clientCfg.EnableInsecureGuestLogons)
-RequireSecuritySignature   : $($clientCfg.RequireSecuritySignature)
+# ============================================================
+# SMB SECURITY MODIFICATION (OPTIONAL)
+# ============================================================
 
-[Server Config]
-RequireSecuritySignature   : $($serverCfg.RequireSecuritySignature)
+function Configure-SMB {
 
-[Registry Guest Auth]
-AllowInsecureGuestAuth     : $($guestAuth.AllowInsecureGuestAuth)
+    if (-not $EnableInsecureSMB) {
+        Write-Host "`nSMB security downgrade skipped (Safe Mode)." -ForegroundColor Cyan
+        return
+    }
 
-==============================
-Please restart your computer
-for changes to take full effect.
-==============================
-"@
+    Write-Host "`nApplying SMB compatibility changes..." -ForegroundColor Cyan
 
-# Print & copy to clipboard
-Write-Host "`nAll settings applied successfully." -ForegroundColor Cyan
-Write-Host "Results copied to clipboard ✅" -ForegroundColor Green
-$result | Set-Clipboard
-Write-Host $result
+    # Allow Guest
+    Set-SmbClientConfiguration -EnableInsecureGuestLogons $true -Force
+    New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LanmanWorkstation" -Force | Out-Null
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LanmanWorkstation" `
+        -Name AllowInsecureGuestAuth -Value 1 -Type DWord
 
+    # Disable Signing
+    Set-SmbClientConfiguration -RequireSecuritySignature $false -Force
+    Set-SmbServerConfiguration -RequireSecuritySignature $false -Force
+
+    Write-Host "SMB Guest Logon Enabled." -ForegroundColor Yellow
+    Write-Host "SMB Signing Disabled." -ForegroundColor Yellow
+}
+
+# ============================================================
+# STATUS SUMMARY
+# ============================================================
+
+function Show-Summary {
+
+    $client = Get-SmbClientConfiguration
+    $server = Get-SmbServerConfiguration
+
+    Write-Host "`n============= SUMMARY =============" -ForegroundColor Cyan
+    Write-Host "Guest Logons Enabled : $($client.EnableInsecureGuestLogons)"
+    Write-Host "Client Signing Req   : $($client.RequireSecuritySignature)"
+    Write-Host "Server Signing Req   : $($server.RequireSecuritySignature)"
+    Write-Host "===================================="
+}
+
+# ============================================================
+# MAIN EXECUTION
+# ============================================================
+
+Enable-NetworkDiscovery
+Configure-SMB
+Restart-NetworkAdapterSafe
+Reset-NetworkStack
+Show-Summary
+
+Write-Host "`nAll operations completed." -ForegroundColor Green
+Write-Host "Restart recommended." -ForegroundColor Yellow
+Pause
