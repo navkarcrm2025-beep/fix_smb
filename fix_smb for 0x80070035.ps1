@@ -155,15 +155,23 @@ function Moderate-Mode {
             ipconfig /flushdns
         }
 
-        # Make sure to open the correct UNC path
+        # Try opening \\ServerName\ (root path) directly
         $UNCPath = "\\$ServerName\"
         Write-Host "Opening \\$ServerName in File Explorer..."
         Start-Process explorer.exe $UNCPath
 
         # Ask user if accessible now
         $userInput = Read-Host "Check Explorer: Can you access \\$ServerName now? (Y/N)"
-        if ($userInput -match "^[Yy]") { $resolved = $true } else { break }
+        if ($userInput -match "^[Yy]") { 
+            Write-Host "Access successful! Exiting..." -ForegroundColor Green
+            return  # Exit the function if accessible
+        } else { 
+            break
+        }
     }
+
+    # If we reach this point, proceed with the other fixes
+    Write-Host "`nProceeding with further fixes..."
 
     # Step 2: Network Profile
     $net = Get-NetConnectionProfile | Select-Object -First 1
@@ -179,7 +187,10 @@ function Moderate-Mode {
     Write-Host "Opening \\$ServerName in File Explorer again..."
     Start-Process explorer.exe $UNCPath
     $userInput = Read-Host "Check Explorer: Try \\$ServerName again. Accessible? (Y/N)"
-    if ($userInput -match "^[Yy]") { return }
+    if ($userInput -match "^[Yy]") { 
+        Write-Host "Access successful! Exiting..." -ForegroundColor Green
+        return  # Exit the function if accessible
+    }
 
     # Step 4: SMB Signing Relax (Temporary)
     Write-Host "Temporarily relaxing SMB signing for client..."
@@ -188,7 +199,10 @@ function Moderate-Mode {
     Write-Host "Opening \\$ServerName in File Explorer..."
     Start-Process explorer.exe $UNCPath
     $userInput = Read-Host "Check Explorer: Try \\$ServerName again. Accessible? (Y/N)"
-    if ($userInput -match "^[Yy]") { return }
+    if ($userInput -match "^[Yy]") { 
+        Write-Host "Access successful! Exiting..." -ForegroundColor Green
+        return  # Exit the function if accessible
+    }
 
     # Step 5: Guest Logon (Optional)
     $guest = Read-Host "Enable guest logon temporarily? (Y/N)"
